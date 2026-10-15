@@ -96,6 +96,7 @@ const sfx = {
 };
 function setSound(on){
   soundOn = on; store.set('sound', on);
+  for (const k in (typeof songEls === 'object' ? songEls : {})) songEls[k].muted = !on;
   if (master) master.gain.value = on ? .55 : 0;
   document.querySelectorAll('svg.snd use').forEach(u => u.setAttribute('href', on ? '#i-snd-on' : '#i-snd-off'));
   document.querySelectorAll('.sndTxt').forEach(s => s.textContent = on ? 'SOM: LIGADO' : 'SOM: MUDO');
@@ -889,55 +890,77 @@ const LANE_COL = ['#ffc531', '#ff3348', '#3fd36a'];
 const LANE_KEYS = [['KeyA','KeyJ','ArrowLeft','Digit1'], ['KeyS','KeyK','ArrowDown','Digit2'], ['KeyD','KeyL','ArrowRight','Digit3']];
 const HIT_Y = 528, TOP_Y = 222, LEAD = 2.2;
 const WIN_PERFECT = .075, WIN_GOOD = .15;
-const bufCache = {};
-function loadBuf(src){
-  if (bufCache[src]) return bufCache[src];
-  let p;
+/* música via <audio>: toca mesmo com o iPhone no silencioso; os arquivos já têm LEAD s de silêncio no início */
+const songEls = {};
+function songEl(src){
+  if (songEls[src]) return songEls[src];
+  let url = src;
   if (src.startsWith('data:')){
-    const b = atob(src.slice(src.indexOf(',')+1)), u = new Uint8Array(b.length);
-    for (let i=0;i<b.length;i++) u[i] = b.charCodeAt(i);
-    p = Promise.resolve(u.buffer);
-  } else p = fetch(src).then(r => r.arrayBuffer());
-  return bufCache[src] = p.then(ab => new Promise((ok, bad) => AC.decodeAudioData(ab, ok, bad)));
+    try {
+      const b = atob(src.slice(src.indexOf(',')+1)), u = new Uint8Array(b.length);
+      for (let i=0;i<b.length;i++) u[i] = b.charCodeAt(i);
+      url = URL.createObjectURL(new Blob([u], { type:'audio/mpeg' }));
+    } catch(e){}
+  }
+  const el = new Audio(); el.preload = 'auto'; el.setAttribute('playsinline', ''); el.src = url;
+  el.addEventListener('error', () => { el.failed = true; });
+  el.load();
+  return songEls[src] = el;
 }
-function showTime(){ const sh = st.show; return AC ? AC.currentTime - sh.t0 : performance.now()/1000 - sh.t0; }
-function stopSong(){ const sh = st.show; if (sh && sh.src){ try { sh.src.stop(); } catch(e){} sh.src = null; } }
+function showTime(){
+  const sh = st.show, now = performance.now()/1000;
+  if (sh.noAudio) return now - sh.t0;
+  const el = sh.el;
+  if (!el || el.paused) return sh.lastT;
+  const m = el.currentTime;
+  if (m !== sh.lastM){ sh.lastM = m; sh.syncWall = now; sh.syncMedia = m; }
+  const t = Math.max(sh.lastT, sh.syncMedia + Math.min(.3, now - sh.syncWall) - LEAD);
+  sh.lastT = t; return t;
+}
+function stopSong(){ const sh = st.show; if (sh && sh.el){ try { sh.el.pause(); } catch(e){} } }
+function playSong(){
+  const sh = st.show, el = sh.el;
+  if (el.failed){ sh.noAudio = true; sh.t0 = performance.now()/1000 + LEAD; sh.needTap = false; return; }
+  el.muted = !soundOn;
+  try { el.currentTime = 0; } catch(e){}
+  sh.lastT = -LEAD; sh.lastM = -1;
+  let p; try { p = el.play(); } catch(e){ p = Promise.reject(e); }
+  sh.needTap = false;
+  if (p && p.catch) p.catch(err => {
+    if (st.show !== sh) return;
+    if (err && err.name === 'NotAllowedError') sh.needTap = true;
+    else { sh.noAudio = true; sh.t0 = performance.now()/1000 + LEAD; }
+  });
+}
 
 function startShow(){
   audio();
-  st.show = { song:0, total:0, src:null };
+  st.show = { song:0, total:0, el:null };
   st.confetti = []; st.parts = [];
   show(null); hudOn(false); hint(false);
   document.body.style.setProperty('--glow', '#b03ae0');
-  SONGS.forEach(s => AC && loadBuf(s.src).catch(()=>{}));
+  SONGS.forEach(s => songEl(s.src));
   startSong(0);
 }
 function startSong(i){
   const sh = st.show, S0 = SONGS[i];
   stopSong();
   Object.assign(sh, { song:i, notes:[], score:0, combo:0, maxCombo:0, hits:0, perfect:0, misses:0, energy:70,
-    judge:null, judgeT:0, laneFlash:[0,0,0], hitFx:[], missT:0, flapT:0, loading:true, ended:false, t0: 0 });
+    judge:null, judgeT:0, laneFlash:[0,0,0], hitFx:[], missT:0, flapT:0, loading:false, ended:false,
+    el: songEl(S0.src), noAudio:false, needTap:false, t0:0, lastT:-LEAD, dur: S0.chart.dur });
   for (const n of S0.chart.notes){ sh.notes.push({ t:n[0], lane:n[1], done:false }); if (n.length > 2) sh.notes.push({ t:n[0], lane:n[2], done:false }); }
   sh.notes.sort((a,b) => a.t - b.t);
   st.mode = 'show';
   show(null);
   tag(`FASE 4 · MÚSICA ${i+1} DE ${SONGS.length}`, i === 0 ? 'O SHOW!' : S0.titulo, 2000);
-  const go = buf => {
-    if (st.show !== sh || sh.song !== i || st.mode !== 'show') return;
-    sh.loading = false;
-    if (AC && buf){
-      const s = AC.createBufferSource(); s.buffer = buf; s.connect(master);
-      sh.t0 = AC.currentTime + LEAD; s.start(sh.t0); sh.src = s;
-    } else sh.t0 = performance.now()/1000 + LEAD;
-    sh.dur = buf ? buf.duration : S0.chart.dur;
-  };
-  if (AC) loadBuf(S0.src).then(go, () => go(null)); else go(null);
+  playSong();
 }
 function judge(kind){
   const sh = st.show; sh.judge = kind; sh.judgeT = .55;
 }
 function hitLane(l){
-  const sh = st.show; if (!sh || sh.loading || st.mode !== 'show') return;
+  const sh = st.show; if (!sh || st.mode !== 'show') return;
+  if (sh.needTap){ sh.needTap = false; playSong(); return; }
   sh.laneFlash[l] = .18;
   const t = showTime();
   let best = null, bd = 9;
@@ -987,7 +1010,8 @@ function updateShow(dt){
   if (st.mode !== 'show' || sh.loading) return;
   const t = showTime();
   for (const n of sh.notes){ if (n.done) continue; if (n.t < t - WIN_GOOD){ n.done = true; missNote(); if (st.mode !== 'show') return; } else break; }
-  if (!sh.ended && t > (sh.dur || 0) + .4 && sh.notes.every(n => n.done)){ sh.ended = true; songDone(); }
+  const over = (!sh.noAudio && sh.el && sh.el.ended) || t > (sh.dur || 0) + .4;
+  if (!sh.ended && over){ for (const n of sh.notes) if (!n.done){ n.done = true; sh.misses++; } sh.ended = true; songDone(); }
 }
 
 /* ---------- palco ---------- */
@@ -1089,8 +1113,8 @@ function renderShow(){
   ctx.fillStyle = ec; roundRect(ex, ey, Math.max(4, ew*sh.energy/100), eh, 4); ctx.fill();
   if (sh.combo >= 4){ ctx.globalAlpha = .55; txt(`${sh.combo} COMBO`, W/2, 330, 20, '#fff'); const mult = Math.min(4, 1 + Math.floor(sh.combo/8)); if (mult > 1) txt(`x${mult}`, W/2, 352, 15, '#ffc531'); ctx.globalAlpha = 1; }
   if (sh.judgeT > 0){ const a = Math.min(1, sh.judgeT*3), s = 1 + (sh.judgeT > .45 ? (sh.judgeT-.45)*3 : 0); ctx.globalAlpha = a; txt(sh.judge, W/2, 452, 26*s, sh.judge === 'ERROU!' ? '#ff3348' : sh.judge === 'PERFEITO!' ? '#ffc531' : '#3fd36a', 'center', '"Luckiest Guy"'); ctx.globalAlpha = 1; }
-  if (!sh.loading && t < 0){ const n = Math.ceil(-t); if (n <= 3 && st.mode === 'show') txt(String(n), W/2, 400, 64 + (1 - ((-t)%1))*20, '#fff', 'center', '"Luckiest Guy"'); }
-  if (sh.loading) txt('CARREGANDO…', W/2, 400, 20, '#fff');
+  if (sh.needTap) txt('TOQUE PARA COMEÇAR', W/2, 400, 22, '#fff');
+  else if (t < 0){ const n = Math.ceil(-t); if (n <= 3 && st.mode === 'show') txt(String(n), W/2, 400, 64 + (1 - ((-t)%1))*20, '#fff', 'center', '"Luckiest Guy"'); }
   for (const c of st.confetti){ ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.r); ctx.fillStyle = c.c; ctx.fillRect(-c.w/2, -c.h/2, c.w, c.h*Math.abs(Math.cos(c.r*1.3))); ctx.restore(); }
 }
 
