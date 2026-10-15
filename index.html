@@ -114,6 +114,12 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .invite dd{margin:0;color:#fff}
 #rank{font:400 5cqw/1 "Lilita One";color:var(--green);margin:0 0 1cqw;letter-spacing:.03em}
 [hidden]{display:none!important}
+.sound-tip{display:flex;align-items:center;gap:3.4cqw;text-align:left;background:#ffc5311f;border:.5cqw solid #ffc53199;border-radius:2.6cqw;padding:3.4cqw 4cqw;margin:0 0 1cqw;animation:tip 1.4s ease-in-out infinite}
+.sound-tip svg{flex:none;width:10cqw;height:10cqw;color:#fff}
+.sound-tip b{display:block;font:400 5.4cqw/1 "Luckiest Guy";color:var(--yellow);letter-spacing:.02em;margin-bottom:1.2cqw}
+.sound-tip span{display:block;font:600 3.3cqw/1.35 Rubik;color:#f1e9dc}
+@keyframes tip{50%{border-color:#ffc531;background:#ffc53133}}
+@media (prefers-reduced-motion:reduce){.sound-tip{animation:none}}
 .kicker{display:block;font:800 3cqw/1 Rubik;letter-spacing:.22em;color:var(--muted);margin:-1cqw 0 2.4cqw}
 .card p.msg{font:600 3.9cqw/1.45 Rubik;text-transform:none;letter-spacing:0;color:#f1e9dc;margin:0 0 4cqw}
 #intro .card .mike{width:56cqw}
@@ -223,6 +229,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
       <img class="mike" src="assets/sprites/mike-voando.webp" alt="">
       <p class="msg">Isso aqui é o convite do meu aniversário! Mas tem um porém: a data e o local só aparecem pra quem zerar o jogo.</p>
       <p class="msg">Voa por Cubatão, passa pelo mangue, encara São Paulo e manda bem no show.</p>
+      <div class="sound-tip"><svg viewBox="0 0 20 20" aria-hidden="true"><use href="#i-snd-on"/></svg><div><b>LIGA O SOM!</b><span>Aumenta o volume e tira o celular do silencioso: o jogo tem trilha e o show precisa da música.</span></div></div>
       <button class="btn" data-act="intro">BORA JOGAR!</button>
     </div>
   </section>
