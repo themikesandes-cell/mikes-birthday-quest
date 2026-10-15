@@ -582,14 +582,13 @@ function phaseClear(){
   st.mode = 'clear';
   const P = PHASES[st.phase], last = st.phase === PHASES.length-1;
   if (st.score > st.best){ st.best = st.score; store.set('best', st.best); }
-  if (last){ finale(); return; }
   sfx.clear();
   const gain = st.hearts < CONFIG.vidas ? 1 : 0;
   $('#clearT').innerHTML = `FASE ${st.phase+1}<br>COMPLETA!`;
   $('#clearP').textContent = `Você passou pelos ${P.obst} obstáculos!`;
   $('#clearI').textContent = `${st.phaseIbis}/${IBIS_PER_PHASE}`;
   $('#clearH').textContent = gain ? '+1' : 'CHEIO';
-  $('#nextBtn').textContent = `PRÓXIMA: ${PHASES[st.phase+1].nome} →`;
+  $('#nextBtn').textContent = last ? 'PRÓXIMA: O SHOW →' : `PRÓXIMA: ${PHASES[st.phase+1].nome} →`;
   st.pendingHeart = gain;
   setTimeout(() => { if (st.mode === 'clear') show('clear'); }, 450);
 }
@@ -603,6 +602,7 @@ function finale(){
   if (f.mapa) links.push(`<a class="btn ghost" href="${encodeURI(f.mapa)}" target="_blank" rel="noopener">VER MAPA</a>`);
   $('#fLinks').innerHTML = links.join(''); $('#fLinks').hidden = !links.length;
   $('#finI').textContent = `${st.ibis}/${TOTAL_IBIS}`; $('#finS').textContent = st.score;
+  $('#finRw').hidden = !st.show; if (st.show) $('#finR').textContent = st.show.total.toLocaleString('pt-BR');
   $('#rank').textContent = st.ibis >= TOTAL_IBIS ? 'LENDA DOS GUARÁS!' : st.ibis >= 10 ? 'CAÇADOR DE GUARÁS!' : st.ibis >= 5 ? 'BOM DE ASA!' : 'SOBREVIVENTE DE CUBATÃO!';
   for (let i=0;i<140;i++) st.confetti.push(confetto(true));
   setTimeout(() => { if (st.mode === 'finale') show('finale'); }, 700);
@@ -615,6 +615,7 @@ function confetto(burst){ const cols = ['#ffc531','#ff3348','#3fd36a','#4ab0ff',
    ====================================================================== */
 function update(dt){
   st.t += dt;
+  if (st.show && st.mode !== 'finale'){ updateShow(dt); return; }
   const P = PHASES[st.phase];
   const playing = st.mode === 'play' || st.mode === 'dying';
   const worldSpeed = st.mode === 'play' ? P.speed : st.mode === 'dying' ? P.speed*.25 : st.mode === 'finale' ? 40 : P.speed*.35;
@@ -716,6 +717,7 @@ function layer(c, f){
   ctx.drawImage(c, -o, 0, LW, H); ctx.drawImage(c, LW-o, 0, LW, H);
 }
 function render(){
+  if (st.show){ renderShow(); return; }
   const L = st.scene, P = PHASES[st.phase];
   ctx.setTransform(S,0,0,S,0,0);
   if (PADT > 0){ ctx.fillStyle = L.top; ctx.fillRect(0,0,W,VH); ctx.fillStyle = L.bot; ctx.fillRect(0,PADT+H-2,W,VH); }
@@ -876,6 +878,223 @@ function drawIbis(x, y, s, t, a=1, outline=false){
 }
 
 /* ======================================================================
+   FASE 4 — O SHOW (ritmo estilo Guitar Hero)
+   ====================================================================== */
+const SONGS = [
+  { titulo:'MÚSICA 1', src:'assets/music/musica-1.mp3', fall:1.75, chart:{"bpm":129.2,"dur":14.96,"notes":[[0.116,1],[0.604,0],[1.091,1],[1.579,0],[2.043,0],[2.508,1],[2.949,2],[3.413,1],[3.878,0],[4.342,1],[4.807,0],[5.294,1],[5.712,0],[6.177,0],[6.641,1],[7.105,0],[7.57,1],[8.034,2],[8.475,1],[8.963,0],[9.427,1],[9.868,0],[10.333,0],[10.797,1],[11.262,0],[11.703,1],[12.167,2],[12.632,1],[13.096,2],[13.56,1],[14.025,2],[14.489,1]]} },
+  { titulo:'MÚSICA 2', src:'assets/music/musica-2.mp3', fall:1.55, chart:{"bpm":143.6,"dur":11.15,"notes":[[0.255,1],[0.813,2],[1.231,1],[1.625,0],[2.02,1],[2.438,2],[2.67,2],[2.902,1],[3.344,2],[3.808,1],[4.203,0],[4.621,1],[4.83,0],[5.039,1],[5.457,0],[5.851,1],[6.246,0],[6.455,0,1],[6.664,1],[7.082,2],[7.291,1],[7.697,2],[8.104,1],[8.313,0],[8.533,1],[8.754,2],[9.172,2],[9.567,1],[9.961,0],[10.356,0],[10.751,1]]} },
+  { titulo:'MÚSICA 3', src:'assets/music/musica-3.mp3', fall:1.35, chart:{"bpm":152.0,"dur":11.15,"notes":[[0.255,1],[0.65,2],[1.068,2],[1.463,1],[1.858,2],[2.252,1],[2.647,0],[3.042,0],[3.46,1],[3.831,2],[4.226,2],[4.423,1],[4.621,2],[5.016,2],[5.213,1],[5.41,0],[5.608,1],[5.805,0],[6.2,1],[6.409,0],[6.618,1],[6.989,2],[7.338,1],[7.546,0],[7.755,0],[7.976,1],[8.197,0],[8.591,1],[8.789,2],[8.986,1],[9.183,2],[9.381,1,0],[9.799,0],[9.996,1],[10.194,2],[10.391,2],[10.588,1],[10.786,0],[10.983,1]]} },
+];
+const LANE_COL = ['#ffc531', '#ff3348', '#3fd36a'];
+const LANE_KEYS = [['KeyA','KeyJ','ArrowLeft','Digit1'], ['KeyS','KeyK','ArrowDown','Digit2'], ['KeyD','KeyL','ArrowRight','Digit3']];
+const HIT_Y = 528, TOP_Y = 222, LEAD = 2.2;
+const WIN_PERFECT = .075, WIN_GOOD = .15;
+const bufCache = {};
+function loadBuf(src){
+  if (bufCache[src]) return bufCache[src];
+  let p;
+  if (src.startsWith('data:')){
+    const b = atob(src.slice(src.indexOf(',')+1)), u = new Uint8Array(b.length);
+    for (let i=0;i<b.length;i++) u[i] = b.charCodeAt(i);
+    p = Promise.resolve(u.buffer);
+  } else p = fetch(src).then(r => r.arrayBuffer());
+  return bufCache[src] = p.then(ab => new Promise((ok, bad) => AC.decodeAudioData(ab, ok, bad)));
+}
+function showTime(){ const sh = st.show; return AC ? AC.currentTime - sh.t0 : performance.now()/1000 - sh.t0; }
+function stopSong(){ const sh = st.show; if (sh && sh.src){ try { sh.src.stop(); } catch(e){} sh.src = null; } }
+
+function startShow(){
+  audio();
+  st.show = { song:0, total:0, src:null };
+  st.confetti = []; st.parts = [];
+  show(null); hudOn(false); hint(false);
+  document.body.style.setProperty('--glow', '#b03ae0');
+  SONGS.forEach(s => AC && loadBuf(s.src).catch(()=>{}));
+  startSong(0);
+}
+function startSong(i){
+  const sh = st.show, S0 = SONGS[i];
+  stopSong();
+  Object.assign(sh, { song:i, notes:[], score:0, combo:0, maxCombo:0, hits:0, perfect:0, misses:0, energy:70,
+    judge:null, judgeT:0, laneFlash:[0,0,0], hitFx:[], missT:0, flapT:0, loading:true, ended:false, t0: 0 });
+  for (const n of S0.chart.notes){ sh.notes.push({ t:n[0], lane:n[1], done:false }); if (n.length > 2) sh.notes.push({ t:n[0], lane:n[2], done:false }); }
+  sh.notes.sort((a,b) => a.t - b.t);
+  st.mode = 'show';
+  show(null);
+  tag(`FASE 4 · MÚSICA ${i+1} DE ${SONGS.length}`, i === 0 ? 'O SHOW!' : S0.titulo, 2000);
+  const go = buf => {
+    if (st.show !== sh || sh.song !== i || st.mode !== 'show') return;
+    sh.loading = false;
+    if (AC && buf){
+      const s = AC.createBufferSource(); s.buffer = buf; s.connect(master);
+      sh.t0 = AC.currentTime + LEAD; s.start(sh.t0); sh.src = s;
+    } else sh.t0 = performance.now()/1000 + LEAD;
+    sh.dur = buf ? buf.duration : S0.chart.dur;
+  };
+  if (AC) loadBuf(S0.src).then(go, () => go(null)); else go(null);
+}
+function judge(kind){
+  const sh = st.show; sh.judge = kind; sh.judgeT = .55;
+}
+function hitLane(l){
+  const sh = st.show; if (!sh || sh.loading || st.mode !== 'show') return;
+  sh.laneFlash[l] = .18;
+  const t = showTime();
+  let best = null, bd = 9;
+  for (const n of sh.notes){ if (n.done || n.lane !== l) continue; const d = Math.abs(n.t - t); if (d < bd){ bd = d; best = n; } if (n.t - t > WIN_GOOD) break; }
+  if (!best || bd > WIN_GOOD) return;
+  best.done = true;
+  const perfect = bd <= WIN_PERFECT;
+  sh.combo++; sh.maxCombo = Math.max(sh.maxCombo, sh.combo); sh.hits++; if (perfect) sh.perfect++;
+  const mult = Math.min(4, 1 + Math.floor(sh.combo/8));
+  sh.score += (perfect ? 100 : 50) * mult;
+  sh.energy = Math.min(100, sh.energy + (perfect ? 4 : 2.5));
+  sh.flapT = FLAP_DUR;
+  judge(perfect ? 'PERFEITO!' : 'BOM!');
+  sh.hitFx.push({ lane:l, life:1, perfect });
+  if (sh.combo > 0 && sh.combo % 10 === 0) tone(1320, .12, 'triangle', .06);
+}
+function missNote(){
+  const sh = st.show;
+  sh.combo = 0; sh.misses++; sh.energy -= 13; sh.missT = .45;
+  judge('ERROU!'); tone(140, .18, 'sawtooth', .08, 90);
+  if (sh.energy <= 0){
+    sh.energy = 0; stopSong(); st.mode = 'show-fail'; sfx.over(); st.shake = .3;
+    $('#overT').textContent = 'A GALERA VAIOU!';
+    $('#overP').innerHTML = 'O Mike perdeu o ritmo.<br>Bora tentar essa música de novo?';
+    setTimeout(() => { if (st.mode === 'show-fail') show('over'); }, 800);
+  }
+}
+function songDone(){
+  const sh = st.show; stopSong();
+  st.mode = 'show-wait'; sh.total += sh.score; sfx.clear();
+  const n = sh.notes.length, acc = n ? Math.round(100*(sh.hits)/n) : 100, last = sh.song === SONGS.length-1;
+  $('#songT').innerHTML = `${SONGS[sh.song].titulo}<br>${acc >= 90 ? 'ARRASOU!' : acc >= 70 ? 'MANDOU BEM!' : 'PASSOU!'}`;
+  $('#songP').textContent = `${sh.score.toLocaleString('pt-BR')} pontos nessa música`;
+  $('#songA').textContent = acc + '%'; $('#songC').textContent = sh.maxCombo;
+  $('#songBtn').textContent = last ? 'IR PRA FESTA →' : `PRÓXIMA: ${SONGS[sh.song+1].titulo} →`;
+  for (let i=0;i<60;i++) st.confetti.push(confetto(true));
+  setTimeout(() => { if (st.mode === 'show-wait') show('song'); }, 500);
+}
+function updateShow(dt){
+  const sh = st.show;
+  for (let k=0;k<3;k++) sh.laneFlash[k] = Math.max(0, sh.laneFlash[k] - dt);
+  sh.judgeT = Math.max(0, sh.judgeT - dt); sh.missT = Math.max(0, sh.missT - dt); sh.flapT = Math.max(0, sh.flapT - dt);
+  for (const f of sh.hitFx) f.life -= dt*2.6; sh.hitFx = sh.hitFx.filter(f => f.life > 0);
+  st.shake = Math.max(0, st.shake - dt);
+  for (const c of st.confetti){ c.vy += 300*dt; c.vy = Math.min(c.vy, 110); c.vx *= Math.pow(.3, dt); c.x += c.vx*dt; c.y += c.vy*dt; c.r += c.vr*dt; }
+  st.confetti = st.confetti.filter(c => c.y < H+20);
+  if (st.mode !== 'show' || sh.loading) return;
+  const t = showTime();
+  for (const n of sh.notes){ if (n.done) continue; if (n.t < t - WIN_GOOD){ n.done = true; missNote(); if (st.mode !== 'show') return; } else break; }
+  if (!sh.ended && t > (sh.dur || 0) + .4 && sh.notes.every(n => n.done)){ sh.ended = true; songDone(); }
+}
+
+/* ---------- palco ---------- */
+let stageBg = null;
+function buildStage(){
+  const [c,x] = mk(W,H);
+  x.fillStyle = vgrad(x,0,H,[[0,'#0c0718'],[.5,'#1c0f34'],[1,'#2a1240']]); x.fillRect(0,0,W,H);
+  // treliça
+  x.strokeStyle = '#3a3448'; x.lineWidth = 2;
+  for (const yy of [52, 66]){ x.beginPath(); x.moveTo(0,yy); x.lineTo(W,yy); x.stroke(); }
+  x.lineWidth = 1; for (let xx=0; xx<W; xx+=14){ x.beginPath(); x.moveTo(xx,52); x.lineTo(xx+14,66); x.moveTo(xx+14,52); x.lineTo(xx,66); x.stroke(); }
+  // caixas de som
+  for (const sx of [6, W-46]){ x.fillStyle = '#141018'; x.fillRect(sx, 380, 40, 150); x.strokeStyle = '#2a2430'; x.strokeRect(sx+.5, 380.5, 39, 149);
+    for (const yy of [410, 460, 505]){ x.fillStyle = '#26202e'; x.beginPath(); x.arc(sx+20, yy, 14, 0, TAU); x.fill(); x.fillStyle = '#0a080c'; x.beginPath(); x.arc(sx+20, yy, 6, 0, TAU); x.fill(); } }
+  // faixa
+  x.save(); x.translate(W/2, 88); x.fillStyle = '#ffc531'; x.fillRect(-92, -12, 184, 24); x.fillStyle = '#14121c'; x.font = '400 15px "Luckiest Guy", sans-serif'; x.textAlign = 'center'; x.fillText('NIVER DO MIKE', 0, 6); x.restore();
+  stageBg = c;
+}
+function laneX(l, p){ // p: 0 no topo, 1 na linha de acerto
+  const sc = lerp(.42, 1, p), gap = 98;
+  return W/2 + (l-1)*gap*sc;
+}
+function laneY(p){ return lerp(TOP_Y, HIT_Y, p*p*.35 + p*.65); }
+function renderShow(){
+  const sh = st.show;
+  if (!stageBg) buildStage();
+  ctx.setTransform(S,0,0,S,0,0);
+  ctx.fillStyle = '#0c0718'; ctx.fillRect(0,0,W,VH);
+  ctx.translate(0, PADT);
+  if (st.shake > 0){ const m = st.shake*12; ctx.translate((Math.random()-.5)*m, (Math.random()-.5)*m); }
+  ctx.drawImage(stageBg, 0, 0, W, H);
+  const t = sh.loading ? -LEAD : showTime(), bpm = SONGS[sh.song].chart.bpm, beat = Math.max(0, t) * bpm / 60, pulse = Math.pow(1 - (beat % 1), 3);
+  // canhões de luz
+  ctx.globalCompositeOperation = 'lighter';
+  for (let k=0;k<4;k++){
+    const ox = 40 + k*93, a = Math.sin(st.t*.9 + k*1.7)*.45, col = ['255,197,49','255,51,72','63,211,106','176,58,224'][k];
+    const g = ctx.createLinearGradient(ox, 66, ox + Math.sin(a)*520, 600); g.addColorStop(0, `rgba(${col},${.22 + pulse*.18})`); g.addColorStop(1, `rgba(${col},0)`);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(ox-4, 66); ctx.lineTo(ox + Math.sin(a)*520 - 70, 640); ctx.lineTo(ox + Math.sin(a)*520 + 70, 640); ctx.lineTo(ox+4, 66); ctx.fill();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  for (let k=0;k<8;k++){ ctx.fillStyle = ['#ffc531','#ff3348','#3fd36a','#b03ae0'][k%4]; ctx.globalAlpha = .5 + pulse*.5; ctx.beginPath(); ctx.arc(22 + k*45, 72, 4, 0, TAU); ctx.fill(); }
+  ctx.globalAlpha = 1;
+  // pista em perspectiva
+  const pts = [[laneX(-.5,0), TOP_Y], [laneX(2.5,0), TOP_Y], [laneX(2.5,1.12), laneY(1.12)], [laneX(-.5,1.12), laneY(1.12)]];
+  ctx.fillStyle = 'rgba(10,8,20,.82)'; ctx.beginPath(); pts.forEach(([a,b],i) => i ? ctx.lineTo(a,b) : ctx.moveTo(a,b)); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 1.5; ctx.stroke();
+  for (let l=0;l<3;l++){
+    if (sh.laneFlash[l] > 0){ ctx.fillStyle = LANE_COL[l]; ctx.globalAlpha = sh.laneFlash[l]*1.2; ctx.beginPath(); ctx.moveTo(laneX(l-.5,0), TOP_Y); ctx.lineTo(laneX(l+.5,0), TOP_Y); ctx.lineTo(laneX(l+.5,1.12), laneY(1.12)); ctx.lineTo(laneX(l-.5,1.12), laneY(1.12)); ctx.fill(); ctx.globalAlpha = 1; }
+    ctx.strokeStyle = 'rgba(255,255,255,.1)'; ctx.beginPath(); ctx.moveTo(laneX(l+.5,0), TOP_Y); ctx.lineTo(laneX(l+.5,1.12), laneY(1.12)); if (l < 2) ctx.stroke();
+  }
+  // traços de tempo
+  if (!sh.loading){ const fall = SONGS[sh.song].fall, spb = 60/bpm;
+    for (let b = Math.ceil(t/spb); b*spb < t + fall; b++){ const p = 1 - (b*spb - t)/fall; if (p < 0) continue; ctx.strokeStyle = `rgba(255,255,255,${b%4 ? .07 : .18})`; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(laneX(-.5,p), laneY(p)); ctx.lineTo(laneX(2.5,p), laneY(p)); ctx.stroke(); } }
+  // receptores
+  for (let l=0;l<3;l++){
+    const x = laneX(l,1), y = HIT_Y, on = sh.laneFlash[l] > 0;
+    ctx.fillStyle = '#0c0a14'; ctx.beginPath(); ctx.arc(x, y, 27, 0, TAU); ctx.fill();
+    ctx.strokeStyle = LANE_COL[l]; ctx.lineWidth = on ? 6 : 4; ctx.beginPath(); ctx.arc(x, y, 24, 0, TAU); ctx.stroke();
+    ctx.fillStyle = on ? LANE_COL[l] : 'rgba(255,255,255,.08)'; ctx.beginPath(); ctx.arc(x, y, 15, 0, TAU); ctx.fill();
+    ctx.font = '400 11px "Lilita One", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(255,255,255,.4)'; ctx.fillText(['A','S','D'][l], x, y + 44);
+  }
+  // notas
+  if (!sh.loading){ const fall = SONGS[sh.song].fall;
+    for (let i = sh.notes.length-1; i >= 0; i--){ const n = sh.notes[i]; if (n.done) continue; const p = 1 - (n.t - t)/fall; if (p < 0 || p > 1.15) continue;
+      const x = laneX(n.lane, p), y = laneY(p), r = 19 * lerp(.45, 1, p);
+      ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(x, y + r*.35, r*1.05, r*.6, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#14121c'; ctx.beginPath(); ctx.arc(x, y, r+2.5, 0, TAU); ctx.fill();
+      ctx.fillStyle = LANE_COL[n.lane]; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.beginPath(); ctx.arc(x, y, r*.45, 0, TAU); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.ellipse(x - r*.35, y - r*.45, r*.28, r*.16, -.5, 0, TAU); ctx.fill();
+    } }
+  // efeitos de acerto
+  for (const f of sh.hitFx){ const x = laneX(f.lane,1); ctx.strokeStyle = LANE_COL[f.lane]; ctx.globalAlpha = f.life; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(x, HIT_Y, 26 + (1-f.life)*26, 0, TAU); ctx.stroke();
+    for (let k=0;k<8;k++){ const a = k/8*TAU, d = 20 + (1-f.life)*40; ctx.fillStyle = f.perfect ? '#fff' : LANE_COL[f.lane]; ctx.beginPath(); ctx.arc(x + Math.cos(a)*d, HIT_Y + Math.sin(a)*d, 3*f.life + 1, 0, TAU); ctx.fill(); } ctx.globalAlpha = 1; }
+  // plateia
+  for (let k=0;k<14;k++){
+    const x = 8 + k*26 + (k%2)*6, bob = (k%3 === 0 ? pulse : Math.pow(1 - ((beat + .5) % 1), 3))*7, y = 618 - bob;
+    ctx.fillStyle = '#06040c'; ctx.beginPath(); ctx.arc(x, y - 18, 9, 0, TAU); ctx.fill(); ctx.fillRect(x-12, y-10, 24, 40);
+    if (k%4 === 1){ ctx.strokeStyle = '#06040c'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x+8, y-6); ctx.lineTo(x+16, y-34 - bob); ctx.stroke(); }
+  }
+  // Mike voando acima da pista
+  if (atlasImg.complete && atlasImg.naturalWidth){
+    let anim = 'glide', i = Math.floor(st.t*7) % 8; if (i > 4) i = 8 - i;
+    if (st.mode === 'show-fail'){ anim = 'fall'; i = Math.min(6, Math.floor((st.t*12) % 7)); }
+    else if (sh.missT > 0){ anim = 'fall'; i = Math.min(2, Math.floor((.45 - sh.missT)*8)); }
+    else if (sh.flapT > 0){ anim = 'flap'; i = Math.min(6, Math.floor((1 - sh.flapT/FLAP_DUR)*7)); }
+    const [sx, sy, sw, sh2, ax, ay] = ATLAS.frames[anim][i], k = SPR_SCALE * .92, my = 150 + Math.sin(st.t*3)*5 - pulse*3;
+    ctx.drawImage(atlasImg, sx, sy, sw, sh2, W/2 - ax*k + 12, my - ay*k, sw*k, sh2*k);
+  }
+  // HUD do show
+  const txt = (s, x, y, size, col, al='center', font='"Lilita One"') => { ctx.font = `400 ${size}px ${font}, sans-serif`; ctx.textAlign = al; ctx.lineWidth = size*.28; ctx.strokeStyle = '#14121c'; ctx.lineJoin = 'round'; ctx.strokeText(s, x, y); ctx.fillStyle = col; ctx.fillText(s, x, y); };
+  const topY = 26 - PADT;
+  txt(`${SONGS[sh.song].titulo} · ${sh.song+1}/${SONGS.length}`, 14, topY + 4, 14, '#ffe3a3', 'left');
+  txt((sh.total + sh.score).toLocaleString('pt-BR'), W - 14, topY + 8, 24, '#fff', 'right');
+  // energia
+  const ex = 14, ey = topY + 14, ew = 130, eh = 9;
+  ctx.fillStyle = '#000a'; roundRect(ex-2, ey-2, ew+4, eh+4, 6); ctx.fill();
+  const ec = sh.energy > 45 ? '#3fd36a' : sh.energy > 22 ? '#ffc531' : '#ff3348';
+  ctx.fillStyle = ec; roundRect(ex, ey, Math.max(4, ew*sh.energy/100), eh, 4); ctx.fill();
+  if (sh.combo >= 4){ ctx.globalAlpha = .55; txt(`${sh.combo} COMBO`, W/2, 330, 20, '#fff'); const mult = Math.min(4, 1 + Math.floor(sh.combo/8)); if (mult > 1) txt(`x${mult}`, W/2, 352, 15, '#ffc531'); ctx.globalAlpha = 1; }
+  if (sh.judgeT > 0){ const a = Math.min(1, sh.judgeT*3), s = 1 + (sh.judgeT > .45 ? (sh.judgeT-.45)*3 : 0); ctx.globalAlpha = a; txt(sh.judge, W/2, 452, 26*s, sh.judge === 'ERROU!' ? '#ff3348' : sh.judge === 'PERFEITO!' ? '#ffc531' : '#3fd36a', 'center', '"Luckiest Guy"'); ctx.globalAlpha = 1; }
+  if (!sh.loading && t < 0){ const n = Math.ceil(-t); if (n <= 3 && st.mode === 'show') txt(String(n), W/2, 400, 64 + (1 - ((-t)%1))*20, '#fff', 'center', '"Luckiest Guy"'); }
+  if (sh.loading) txt('CARREGANDO…', W/2, 400, 20, '#fff');
+  for (const c of st.confetti){ ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.r); ctx.fillStyle = c.c; ctx.fillRect(-c.w/2, -c.h/2, c.w, c.h*Math.abs(Math.cos(c.r*1.3))); ctx.restore(); }
+}
+
+/* ======================================================================
    LOOP / RESIZE / INPUT
    ====================================================================== */
 let last = performance.now();
@@ -892,7 +1111,7 @@ function resize(){
   if (Math.abs(ns - S) < .01 && nvh === VH && OB) return;
   VH = nvh; PADT = Math.round((VH - H) * .6);
   S = ns; cv.width = Math.round(W*S); cv.height = Math.round(VH*S);
-  OB = buildObstacles();
+  OB = buildObstacles(); stageBg = null;
   if (st.scene) st.scene = SCENES[PHASES[st.phase].id]();
 }
 addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(resize, 120); });
@@ -900,6 +1119,7 @@ addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(r
 function press(e){
   if (e && e.target.closest && e.target.closest('button,a')) return;
   audio();
+  if (st.mode === 'show'){ if (e && e.clientX !== undefined){ const r = cv.getBoundingClientRect(), lx = (e.clientX - r.left)/r.width*W; hitLane(lx < W/3 ? 0 : lx < W*2/3 ? 1 : 2); } return; }
   if (st.mode === 'play') flap();
   else if (st.mode === 'ready') startPlay();
   else if (st.mode === 'menu') { sfx.click(); enterPhase(0); }
@@ -907,13 +1127,21 @@ function press(e){
 game.addEventListener('pointerdown', e => { if (e.button > 0) return; press(e); if (!e.target.closest('button,a')) e.preventDefault(); });
 addEventListener('keydown', e => {
   if (e.repeat) return;
+  if (st.mode === 'show'){ const l = LANE_KEYS.findIndex(ks => ks.includes(e.code)); if (l >= 0){ e.preventDefault(); hitLane(l); return; } }
+  if (e.code === 'Space' && st.mode === 'show-wait' && $('#song').classList.contains('on')){ e.preventDefault(); act('nextSong'); return; }
+  if (e.code === 'Space' && st.mode === 'show-fail'){ e.preventDefault(); act('retry'); return; }
   if (['Space','ArrowUp','KeyW'].includes(e.code)){ e.preventDefault();
     if (st.mode === 'over') act('retry'); else if (st.mode === 'clear' && $('#clear').classList.contains('on')) act('next'); else if (st.mode === 'pause') act('resume'); else press();
   }
   if (e.code === 'Escape' || e.code === 'KeyP'){ if (st.mode === 'play') act('pause'); else if (st.mode === 'pause') act('resume'); }
   if (e.code === 'KeyM') setSound(!soundOn);
 });
-document.addEventListener('visibilitychange', () => { if (document.hidden && st.mode === 'play') act('pause'); });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && st.mode === 'play') act('pause');
+  if (document.hidden && st.mode === 'show'){ stopSong(); st.mode = 'show-paused'; }
+  if (!document.hidden && st.mode === 'show-paused') startSong(st.show.song);
+});
+function resetOverText(){ $('#overT').textContent = 'GAME OVER'; $('#overP').innerHTML = 'Não foi dessa vez,<br>mas a festa ainda te espera!'; }
 
 let pausedFrom = null;
 function act(a){
@@ -922,10 +1150,11 @@ function act(a){
     case 'start': sfx.click(); enterPhase(0); break;
     case 'pause': if (st.mode === 'play' || st.mode === 'ready'){ pausedFrom = st.mode; st.mode = 'pause'; show('pause'); } break;
     case 'resume': if (st.mode === 'pause'){ st.mode = pausedFrom || 'play'; show(null); last = performance.now(); } break;
-    case 'retry': sfx.click(); st.score = st.scoreAtPhase; st.ibis = st.ibisAtPhase; st.hearts = CONFIG.vidas; enterPhase(st.phase); break;
-    case 'menu': sfx.click(); toMenu(); break;
-    case 'next': sfx.click(); st.hearts = Math.min(CONFIG.vidas, st.hearts + (st.pendingHeart||0)); st.pendingHeart = 0; enterPhase(st.phase + 1, { crossfade: true }); break;
-    case 'restart': sfx.click(); st.confetti = []; st.score = 0; st.ibis = 0; st.hearts = CONFIG.vidas; enterPhase(0, { crossfade: true, rebuild: true }); break;
+    case 'retry': if (st.show){ sfx.click(); resetOverText(); startSong(st.show.song); break; } sfx.click(); st.score = st.scoreAtPhase; st.ibis = st.ibisAtPhase; st.hearts = CONFIG.vidas; enterPhase(st.phase); break;
+    case 'menu': sfx.click(); stopSong(); st.show = null; resetOverText(); toMenu(); break;
+    case 'next': if (st.phase === PHASES.length-1){ sfx.click(); startShow(); break; } sfx.click(); st.hearts = Math.min(CONFIG.vidas, st.hearts + (st.pendingHeart||0)); st.pendingHeart = 0; enterPhase(st.phase + 1, { crossfade: true }); break;
+    case 'nextSong': if (st.show && st.mode === 'show-wait'){ sfx.click(); if (st.show.song < SONGS.length-1) startSong(st.show.song+1); else finale(); } break;
+    case 'restart': stopSong(); st.show = null; sfx.click(); st.confetti = []; st.score = 0; st.ibis = 0; st.hearts = CONFIG.vidas; enterPhase(0, { crossfade: true, rebuild: true }); break;
     case 'sound': setSound(!soundOn); sfx.click(); break;
   }
 }
@@ -943,6 +1172,7 @@ requestAnimationFrame(t => { last = t; frame(t); });
 
 // atalho p/ testes: ?fase=2
 const q = new URLSearchParams(location.search);
-if (q.get('fase')){ const f = clamp((+q.get('fase')||1)-1, 0, PHASES.length-1); setScene(f); enterPhase(f); }
-window.__fm = { st, act, enterPhase, startPlay, PHASES };
+if (q.get('fase') === '4') startShow();
+else if (q.get('fase')){ const f = clamp((+q.get('fase')||1)-1, 0, PHASES.length-1); setScene(f); enterPhase(f); }
+window.__fm = { st, act, enterPhase, startPlay, PHASES, startShow, hitLane, showTime, SONGS };
 })();

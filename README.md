@@ -3,8 +3,10 @@
 Joguinho estilo Flappy Bird do aniversário do Mike: voe por o **Jardim Nova República** (Cubatão), os **manguezais de Cubatão** e **São Paulo**, colete os 15 guarás e chegue na festa.
 
 - Toque / clique / espaço para voar · `P` pausa · `M` som
-- 3 vidas, 3 fases (8, 10 e 12 obstáculos); ao terminar aparece o convite
-- `?fase=2` ou `?fase=3` na URL pula direto pra uma fase (pra testar)
+- 3 vidas, 3 fases de voo (8, 10 e 12 obstáculos)
+- Fase 4, **O Show**: 3 músicas estilo Guitar Hero (toque nas 3 pistas ou use A, S, D); depois aparece o convite
+- As músicas ficam em `assets/music/`; as notas foram geradas a partir das batidas e estão em `SONGS` no `game.js`
+- `?fase=2`, `?fase=3` ou `?fase=4` na URL pula direto pra uma fase (pra testar)
 
 ## Editar o convite
 No topo de `game.js`, preencha `CONFIG.festa` (data, hora, local e, opcionalmente, links do Google Maps e do WhatsApp para confirmar presença).

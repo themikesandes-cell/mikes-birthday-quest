@@ -144,9 +144,9 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 
   <section class="screen dim" id="over">
     <div class="card">
-      <h2 class="h-red">GAME OVER</h2>
+      <h2 class="h-red" id="overT">GAME OVER</h2>
       <img class="mike" src="assets/sprites/mike-caido.webp" alt="">
-      <p>Não foi dessa vez,<br>mas a festa ainda te espera!</p>
+      <p id="overP">Não foi dessa vez,<br>mas a festa ainda te espera!</p>
       <button class="btn" data-act="retry">TENTAR NOVAMENTE</button>
       <button class="btn ghost" data-act="menu">VOLTAR AO MENU</button>
     </div>
@@ -172,12 +172,22 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
     </div>
   </section>
 
+  <section class="screen dim" id="song">
+    <div class="card">
+      <h2 class="h-yellow" id="songT">MÚSICA 1<br>MANDOU BEM!</h2>
+      <img class="mike" src="assets/sprites/mike-comemora.webp" alt="">
+      <p id="songP">A galera foi à loucura!</p>
+      <div class="stat"><span>ACERTOS <b id="songA">0%</b></span><span>COMBO <b id="songC">0</b></span></div>
+      <button class="btn green" data-act="nextSong" id="songBtn">PRÓXIMA MÚSICA →</button>
+    </div>
+  </section>
+
   <section class="screen dim" id="finale">
     <div class="card">
       <h2 class="h-yellow">CHEGOU NA<br>FESTA!</h2>
       <img class="mike" src="assets/sprites/mike-voando.webp" alt="" style="width:46cqw;margin-bottom:3cqw">
       <div id="rank">LENDA DOS GUARÁS!</div>
-      <div class="stat"><span><svg viewBox="0 0 40 40"><use href="#i-ibis"/></svg><b id="finI">0/15</b></span><span>★ <b id="finS">0</b></span></div>
+      <div class="stat"><span><svg viewBox="0 0 40 40"><use href="#i-ibis"/></svg><b id="finI">0/15</b></span><span>★ <b id="finS">0</b></span><span id="finRw" hidden>♪ <b id="finR">0</b></span></div>
       <div class="invite">
         <small>VOCÊ ESTÁ CONVIDADO(A)</small>
         <strong id="fTitle">NIVER DO MIKE</strong>
