@@ -8,7 +8,7 @@
 const CONFIG = {
   festa: {
     titulo:   'NIVER DO MIKE',
-    data:     'SEXTA, 14 DE NOVEMBRO',
+    data:     'SEXTA, 13 DE NOVEMBRO',
     hora:     '20H',
     local:    'PICLES CARDEAL',
     endereco: 'RUA CARDEAL ARCOVERDE, 1838',
