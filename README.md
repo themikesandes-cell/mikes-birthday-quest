@@ -1,6 +1,6 @@
 # Flappy Mike 🎂
 
-Joguinho estilo Flappy Bird do aniversário do Mike: voe por **Cubatão**, **Cachoeira do Pilão** e **Santos**, colete os 15 guarás e chegue na festa.
+Joguinho estilo Flappy Bird do aniversário do Mike: voe por o **Jardim Nova República** (Cubatão), os **manguezais de Cubatão** e **São Paulo**, colete os 15 guarás e chegue na festa.
 
 - Toque / clique / espaço para voar · `P` pausa · `M` som
 - 3 vidas, 3 fases (8, 10 e 12 obstáculos); ao terminar aparece o convite
