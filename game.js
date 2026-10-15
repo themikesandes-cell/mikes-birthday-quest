@@ -25,16 +25,11 @@ const PHASES = [
 const IBIS_PER_PHASE = 5;
 const TOTAL_IBIS = IBIS_PER_PHASE * PHASES.length;
 
-/* sprites (âncora = centro da cabeça, em px da imagem) */
-const SPRITES = {
-  feliz:  { w:379, h:231, ax:231.5, ay:77.4 },
-  bate:   { w:304, h:205, ax:191.2, ay:70.6 },
-  quase:  { w:267, h:212, ax:149.9, ay:66.9 },
-  triste: { w:343, h:195, ax:246.9, ay:125.0 },
-  pronto: { w:264, h:202, ax:155.4, ay:69.3 },
-};
-const SPR_SCALE = 0.33;          // px lógicos por px da sprite
-const HIT_R = 21;                // raio da hitbox (generoso)
+/* sprites: atlas com as animações do Mike — [x, y, w, h, âncoraX, âncoraY] (âncora = centro da cabeça) */
+const ATLAS = {"scale":0.4167,"frames":{"flap":[[0,0,294,234,205.3,47.1],[298,0,295,238,194.7,50.3],[597,0,306,240,228.1,50.9],[907,0,307,234,217.8,50.2],[1218,0,329,241,222.6,53.0],[1551,0,288,252,186.7,52.9],[0,256,284,254,181.0,55.5]],"glide":[[288,256,397,207,289.4,52.4],[689,256,443,209,282.1,52.8],[1136,256,399,208,264.0,51.1],[1539,256,440,192,274.0,50.3],[0,514,410,192,277.5,51.0]],"fall":[[414,514,408,237,289.9,86.9],[826,514,356,298,233.7,151.8],[1186,514,410,313,331.1,163.4],[1600,514,284,298,185.2,172.1],[0,831,328,308,239.3,169.5],[332,831,291,321,220.5,210.2],[627,831,264,244,208.8,190.3]],"crash":[[895,831,391,171,338.0,112.8],[1290,831,356,184,293.6,130.1],[0,1156,404,194,329.9,108.3],[408,1156,406,177,333.5,97.6],[818,1156,404,157,343.0,88.1]]}};
+const SPR_SCALE = ATLAS.scale * 0.86;   // px lógicos por px do atlas
+const FLAP_DUR = 0.24;
+const HIT_R = 19;                // raio da hitbox (generoso)
 
 /* ---------- constantes de mundo ---------- */
 const W = 360, H = 640, LW = 720;
@@ -60,8 +55,7 @@ const game = $('#game'), cv = $('#c'), ctx = cv.getContext('2d');
 let S = 1; // px de backing por unidade lógica
 function mk(w,h){ const c = document.createElement('canvas'); c.width = Math.ceil(w*S); c.height = Math.ceil(h*S); const x = c.getContext('2d'); x.setTransform(S,0,0,S,0,0); return [c,x]; }
 
-const img = {};
-for (const k in SPRITES){ const i = new Image(); i.src = `assets/sprites/mike-${k}.webp`; img[k] = i; }
+const atlasImg = new Image(); atlasImg.src = 'assets/sprites/mike-atlas.webp';
 
 /* ======================================================================
    ÁUDIO (sintetizado, sem arquivos)
@@ -445,7 +439,7 @@ function startPlay(){
   flap();
 }
 function flap(){
-  st.vy = FLAP; st.flapT = .16; sfx.flap();
+  st.vy = FLAP; st.flapT = FLAP_DUR; sfx.flap();
   for (let i=0;i<2;i++) st.parts.push(feather(MIKE_X - 30, st.y + 10, -80 - Math.random()*60, -40 + Math.random()*80));
 }
 function feather(x,y,vx,vy,col='#fff'){ return { type:'feather', x, y, vx, vy, r: Math.random()*TAU, vr: (Math.random()-.5)*8, life: 1, col }; }
@@ -457,7 +451,7 @@ function hurt(){
   st.parts.push({ type:'star', x: MIKE_X+18, y: st.y-30, life: 1 });
   const h = hud.hearts.children[st.hearts]; if (h){ h.classList.remove('pop'); void h.offsetWidth; h.classList.add('pop'); }
   drawHUD();
-  if (st.hearts <= 0){ st.mode = 'dying'; st.overT = 1.1; sfx.over(); hudOn(true); }
+  if (st.hearts <= 0){ st.mode = 'dying'; st.dieT = 0; st.landed = false; st.overT = 0; sfx.over(); hudOn(true); }
 }
 function phaseClear(){
   st.mode = 'clear';
@@ -510,12 +504,19 @@ function update(dt){
     st.y += st.vy*dt;
     if (st.y < 24 - PADT){ st.y = 24 - PADT; st.vy = Math.max(0, st.vy); }
     if (st.mode === 'play' && st.y > GROUND_Y - 6){ st.y = GROUND_Y - 6; hurt(); st.vy = -460; }
-    if (st.mode === 'dying'){ st.y = Math.min(st.y, H+120); st.overT -= dt; if (st.overT <= 0){ st.mode = 'over'; show('over'); hudOn(false); } }
+    if (st.mode === 'dying'){
+      st.dieT += dt;
+      if (!st.landed && st.y >= GROUND_Y - 12){ // esborrachou no chão
+        st.landed = true; st.landT = 0; st.y = GROUND_Y - 12; st.shake = .25; noise(.3,.7,180); tone(90,.25,'sine',.3,40);
+        for (let i=0;i<14;i++) st.parts.push({ type:'dust', x: MIKE_X + (Math.random()-.5)*60, y: GROUND_Y + 6, vx:(Math.random()-.5)*160, vy:-30-Math.random()*60, life:1, r:6+Math.random()*8 });
+      }
+      if (st.landed){ st.y = GROUND_Y - 12; st.vy = 0; st.landT += dt; if (st.landT > 1.3 && st.mode === 'dying'){ st.mode = 'over'; show('over'); hudOn(false); } }
+    }
   } else if (st.mode === 'ready' || st.mode === 'clear' || st.mode === 'finale' || st.mode === 'menu'){
     st.y = lerp(st.y, H*.42 + Math.sin(st.t*3)*10, 1 - Math.pow(.02, dt)); st.vy = Math.cos(st.t*3)*30;
   }
-  const targetRot = st.mode === 'dying' ? st.rot + 6*dt : clamp(st.vy/650*.55, -.38, .55);
-  st.rot = st.mode === 'dying' ? targetRot : lerp(st.rot, targetRot, 1 - Math.pow(.0005, dt));
+  const targetRot = st.mode === 'dying' ? 0 : clamp(st.vy/650*.45, -.32, .4);
+  st.rot = lerp(st.rot, targetRot, 1 - Math.pow(.0005, dt));
   st.flapT = Math.max(0, st.flapT - dt); st.inv = Math.max(0, st.inv - dt); st.hurtT = Math.max(0, st.hurtT - dt); st.shake = Math.max(0, st.shake - dt);
 
   // mundo
@@ -546,6 +547,7 @@ function update(dt){
     if (q.vx !== undefined){ q.x += q.vx*dt; q.y += q.vy*dt; }
     if (q.type === 'feather'){ q.vy += 260*dt; q.vx *= Math.pow(.2, dt); q.vy = Math.min(q.vy, 60); q.r += q.vr*dt; }
     if (q.type === 'text') q.y -= 30*dt;
+    if (q.type === 'dust'){ q.vx *= Math.pow(.1, dt); q.vy *= Math.pow(.1, dt); q.r += 14*dt; }
     if (q.type === 'star') q.y -= 20*dt;
   }
   st.parts = st.parts.filter(q => q.life > 0);
@@ -624,17 +626,20 @@ function render(){
     drawIbis(p.x, y, 1.25, st.t*12 + p.ph, 1, true);
   }
   // Mike
-  if (st.mode !== 'menu') drawMike();
+  const mikeOnTop = st.mode === 'dying' || st.mode === 'over';
+  if (st.mode !== 'menu' && !mikeOnTop) drawMike();
   // partículas
   for (const q of st.parts){
     ctx.globalAlpha = clamp(q.life, 0, 1);
     if (q.type === 'feather'){ ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.r); ctx.fillStyle = q.col; ctx.beginPath(); ctx.ellipse(0,0,5,2,0,0,TAU); ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = .8; ctx.beginPath(); ctx.moveTo(-5,0); ctx.lineTo(5,0); ctx.stroke(); ctx.restore(); }
     else if (q.type === 'spark'){ ctx.fillStyle = '#ffe28a'; ctx.beginPath(); ctx.arc(q.x, q.y, 3*q.life+1, 0, TAU); ctx.fill(); }
     else if (q.type === 'text'){ ctx.font = '400 15px "Lilita One", sans-serif'; ctx.textAlign = 'center'; ctx.lineWidth = 4; ctx.strokeStyle = '#14121c'; ctx.strokeText(q.txt, q.x, q.y); ctx.fillStyle = '#ffd34a'; ctx.fillText(q.txt, q.x, q.y); }
+    else if (q.type === 'dust'){ ctx.globalAlpha = clamp(q.life,0,1)*.6; ctx.fillStyle = '#b9a690'; ctx.beginPath(); ctx.arc(q.x, q.y, q.r, 0, TAU); ctx.fill(); }
     else if (q.type === 'star'){ drawStar(q.x, q.y, 9 + (1-q.life)*6, st.t*6); }
     ctx.globalAlpha = 1;
   }
   layer(L.fg, 1);
+  if (mikeOnTop) drawMike();
   // confete
   for (const c of st.confetti){ ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.r); ctx.fillStyle = c.c; ctx.fillRect(-c.w/2, -c.h/2, c.w, c.h*Math.abs(Math.cos(c.r*1.3))); ctx.restore(); }
   // flash de dano
@@ -642,19 +647,27 @@ function render(){
   // transição entre fases
   if (st.fade > 0 && st.sceneOld){ ctx.globalAlpha = st.fade; ctx.drawImage(st.sceneOld, 0, -PADT, W, VH); ctx.globalAlpha = 1; }
 }
+function mikeFrame(){
+  // devolve [animação, quadro, fator de rotação]
+  if (st.mode === 'dying'){
+    if (st.landed) return ['crash', Math.min(4, Math.floor(st.landT*10)), 0];
+    return ['fall', Math.min(6, Math.floor(st.dieT*12)), 0];
+  }
+  if (st.mode === 'over') return ['crash', 4, 0];
+  if (st.hurtT > 0) return ['fall', Math.min(2, Math.floor((.6 - st.hurtT)*9)), .3];
+  if (st.flapT > 0) return ['flap', Math.min(6, Math.floor((1 - st.flapT/FLAP_DUR)*7)), 1];
+  if (st.mode === 'play' && st.vy > 400) return ['fall', 0, .5];
+  const n = ATLAS.frames.glide.length, k = Math.floor(st.t*7) % (n*2-2);
+  return ['glide', k < n ? k : n*2-2-k, 1];
+}
 function drawMike(){
-  let pose = 'feliz';
-  if (st.mode === 'dying' || st.mode === 'over' || st.hurtT > 0) pose = 'triste';
-  else if (st.mode === 'ready' || st.mode === 'clear') pose = 'pronto';
-  else if (st.flapT > 0) pose = 'bate';
-  else if (st.vy > 330) pose = 'quase';
-  const sp = SPRITES[pose], im = img[pose];
-  if (!im.complete || !im.naturalWidth) return;
+  if (!atlasImg.complete || !atlasImg.naturalWidth) return;
+  const [anim, i, rf] = mikeFrame(), [sx, sy, sw, sh, ax, ay] = ATLAS.frames[anim][i];
   ctx.save();
-  ctx.translate(MIKE_X, st.y); ctx.rotate(pose === 'triste' ? st.rot*.4 : st.rot);
-  if (st.inv > 0 && st.mode === 'play' && Math.floor(st.inv*12) % 2) ctx.globalAlpha = .45;
-  const k = SPR_SCALE * (st.flapT > .1 ? 1.03 : 1);
-  ctx.drawImage(im, -sp.ax*k, -sp.ay*k, sp.w*k, sp.h*k);
+  ctx.translate(MIKE_X, st.y); ctx.rotate(st.rot * rf);
+  if (st.inv > 0 && st.mode === 'play' && st.hurtT <= 0 && Math.floor(st.inv*12) % 2) ctx.globalAlpha = .45;
+  const k = SPR_SCALE;
+  ctx.drawImage(atlasImg, sx, sy, sw, sh, -ax*k, -ay*k, sw*k, sh*k);
   ctx.restore();
 }
 function drawObstacle(o, P){
