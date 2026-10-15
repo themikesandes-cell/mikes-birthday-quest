@@ -114,6 +114,18 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .invite dd{margin:0;color:#fff}
 #rank{font:400 5cqw/1 "Lilita One";color:var(--green);margin:0 0 1cqw;letter-spacing:.03em}
 [hidden]{display:none!important}
+.kicker{display:block;font:800 3cqw/1 Rubik;letter-spacing:.22em;color:var(--muted);margin:-1cqw 0 2.4cqw}
+.card p.msg{font:600 3.9cqw/1.45 Rubik;text-transform:none;letter-spacing:0;color:#f1e9dc;margin:0 0 4cqw}
+#intro .card .mike{width:56cqw}
+#finale{overflow-y:auto;align-items:flex-start;padding-block:8cqw}
+#finale .card{margin:auto 0}
+#finale .card .mike{width:40cqw;margin-bottom:2cqw}
+.invite .maplink{display:inline-block;margin-top:3.4cqw;font:400 4.2cqw/1 "Lilita One";color:var(--yellow);text-decoration:none;letter-spacing:.03em}
+.ask{font:400 6.4cqw/1 "Luckiest Guy";color:#fff;margin:5cqw 0 0;-webkit-text-stroke:1cqw var(--ink);paint-order:stroke fill}
+.btn.no{color:#ffb4b4;border-color:#6a2a2e;font-size:4.4cqw}
+.card p.note{font:700 3.6cqw/1.4 Rubik;text-transform:none;color:var(--green);margin:3cqw 0 0}
+#finale #rank{margin-top:6cqw}
+#finale .stat{margin:2cqw 0 1cqw}
 </style>
 </head>
 <body>
@@ -183,18 +195,35 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
   </section>
 
   <section class="screen dim" id="finale">
-    <div class="card">
-      <h2 class="h-yellow">CHEGOU NA<br>FESTA!</h2>
-      <img class="mike" src="assets/sprites/mike-voando.webp" alt="" style="width:46cqw;margin-bottom:3cqw">
-      <div id="rank">LENDA DOS GUARÁS!</div>
-      <div class="stat"><span><svg viewBox="0 0 40 40"><use href="#i-ibis"/></svg><b id="finI">0/15</b></span><span>★ <b id="finS">0</b></span><span id="finRw" hidden>♪ <b id="finR">0</b></span></div>
+    <div class="card fin">
+      <small class="kicker">FIM DE JOGO</small>
+      <h2 class="h-yellow">VOCÊ<br>ZEROU!</h2>
+      <img class="mike" src="assets/sprites/mike-guitarra-rock.webp" alt="">
+      <p class="msg">Você atravessou Cubatão, o mangue e São Paulo e ainda segurou o show. O prêmio é seu: um convite pro aniversário do Mike!</p>
       <div class="invite">
         <small>VOCÊ ESTÁ CONVIDADO(A)</small>
         <strong id="fTitle">NIVER DO MIKE</strong>
         <dl id="fList"></dl>
+        <a id="fMap" class="maplink" href="#" target="_blank" rel="noopener">ABRIR NO MAPA →</a>
       </div>
-      <div class="row" id="fLinks"></div>
-      <button class="btn" data-act="restart">JOGAR DE NOVO</button>
+      <div class="ask">E AÍ, VAI COLAR?</div>
+      <a class="btn green" id="rsvpYes" href="#" target="_blank" rel="noopener">VOU COLAR SIM!</a>
+      <a class="btn ghost no" id="rsvpNo" href="#" target="_blank" rel="noopener">VOU SER VACILÃO E NÃO VOU</a>
+      <p class="note" id="rsvpNote" hidden></p>
+      <div id="rank">LENDA DOS GUARÁS!</div>
+      <div class="stat"><span><svg viewBox="0 0 40 40"><use href="#i-ibis"/></svg><b id="finI">0/15</b></span><span>★ <b id="finS">0</b></span><span id="finRw" hidden>♪ <b id="finR">0</b></span></div>
+      <button class="btn ghost" data-act="restart">JOGAR DE NOVO</button>
+    </div>
+  </section>
+
+  <section class="screen dim" id="intro">
+    <div class="card">
+      <small class="kicker">VOCÊ RECEBEU UM CONVITE</small>
+      <h2 class="h-yellow">NIVER DO<br>MIKE!</h2>
+      <img class="mike" src="assets/sprites/mike-voando.webp" alt="">
+      <p class="msg">Isso aqui é o convite do meu aniversário! Mas tem um porém: a data e o local só aparecem pra quem zerar o jogo.</p>
+      <p class="msg">Voa por Cubatão, passa pelo mangue, encara São Paulo e manda bem no show.</p>
+      <button class="btn" data-act="intro">BORA JOGAR!</button>
     </div>
   </section>
 </div>

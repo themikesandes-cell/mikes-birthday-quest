@@ -7,12 +7,15 @@
 /* ---------- EDITE AQUI os dados da festa ---------- */
 const CONFIG = {
   festa: {
-    titulo:    'NIVER DO MIKE',
-    data:      'A CONFIRMAR',      // ex: 'SÁB, 25 DE OUTUBRO'
-    hora:      '',                 // ex: '20H'
-    local:     'A CONFIRMAR',      // ex: 'BAR DO ZÉ — SANTOS'
-    mapa:      '',                 // link do Google Maps (opcional)
-    confirmar: '',                 // link do WhatsApp p/ confirmar presença (opcional)
+    titulo:   'NIVER DO MIKE',
+    data:     'SEXTA, 14 DE NOVEMBRO',
+    hora:     '20H',
+    local:    'PICLES CARDEAL',
+    endereco: 'RUA CARDEAL ARCOVERDE, 1838',
+    mapa:     'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent('Picles Cardeal, Rua Cardeal Arcoverde, 1838, São Paulo'),
+    whatsapp: '',                         // número do Mike só com dígitos, ex: '5513999999999' (vazio = a pessoa escolhe o contato)
+    msgSim:   'VOU COLAR SIM!',
+    msgNao:   'VOU SER VACILÃO E NÃO VOU',
   },
   vidas: 3,
 };
@@ -24,7 +27,7 @@ const PHASES = [
 ];
 const IBIS_PER_PHASE = 5;
 /* trilha das fases de voo (em loop) */
-const BGM = { cubatao:'assets/music/hino-cubatao.mp3', sp:'assets/music/tiro-ao-alvaro.mp3' };
+const BGM = { cubatao:'assets/music/hino-cubatao.mp3', sp:'assets/music/tiro-ao-alvaro.mp3', final:'assets/music/final-epico.mp3' };
 const BGM_VOL = .5;
 const TOTAL_IBIS = IBIS_PER_PHASE * PHASES.length;
 
@@ -614,21 +617,22 @@ function phaseClear(){
   st.pendingHeart = gain;
   setTimeout(() => { if (st.mode === 'clear') show('clear'); }, 450);
 }
+function waLink(msg){ const n = String(CONFIG.festa.whatsapp || '').replace(/\D/g, ''); return `https://wa.me/${n}?text=${encodeURIComponent(msg)}`; }
 function finale(){
-  st.mode = 'finale'; sfx.fanfare();
+  st.mode = 'finale'; stopSong(); bgmPlay('final');
   const f = CONFIG.festa;
   $('#fTitle').textContent = f.titulo;
-  $('#fList').innerHTML = [['DATA', f.data], ['HORA', f.hora], ['LOCAL', f.local]].filter(r => r[1]).map(([k,v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('');
-  const links = [];
-  if (f.confirmar) links.push(`<a class="btn green" href="${encodeURI(f.confirmar)}" target="_blank" rel="noopener">CONFIRMAR</a>`);
-  if (f.mapa) links.push(`<a class="btn ghost" href="${encodeURI(f.mapa)}" target="_blank" rel="noopener">VER MAPA</a>`);
-  $('#fLinks').innerHTML = links.join(''); $('#fLinks').hidden = !links.length;
+  $('#fList').innerHTML = [['QUANDO', f.data], ['HORA', f.hora], ['ONDE', f.local], ['ENDEREÇO', f.endereco]].filter(r => r[1]).map(([k,v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('');
+  $('#fMap').href = f.mapa; $('#fMap').hidden = !f.mapa;
+  $('#rsvpYes').href = waLink(f.msgSim); $('#rsvpNo').href = waLink(f.msgNao); $('#rsvpNote').hidden = true;
   $('#finI').textContent = `${st.ibis}/${TOTAL_IBIS}`; $('#finS').textContent = st.score;
   $('#finRw').hidden = !st.show; if (st.show) $('#finR').textContent = st.show.total.toLocaleString('pt-BR');
   $('#rank').textContent = st.ibis >= TOTAL_IBIS ? 'LENDA DOS GUARÁS!' : st.ibis >= 10 ? 'CAÇADOR DE GUARÁS!' : st.ibis >= 5 ? 'BOM DE ASA!' : 'SOBREVIVENTE DE CUBATÃO!';
   for (let i=0;i<140;i++) st.confetti.push(confetto(true));
-  setTimeout(() => { if (st.mode === 'finale') show('finale'); }, 700);
+  setTimeout(() => { if (st.mode === 'finale'){ show('finale'); $('#finale').scrollTop = 0; } }, 700);
 }
+$('#rsvpYes').addEventListener('click', e => { e.stopPropagation(); const n = $('#rsvpNote'); n.textContent = 'Boa! É só mandar a mensagem no WhatsApp que abriu.'; n.hidden = false; });
+$('#rsvpNo').addEventListener('click', e => { e.stopPropagation(); const n = $('#rsvpNote'); n.textContent = 'Tá certo, vacilão. A mensagem já tá pronta no WhatsApp.'; n.hidden = false; });
 function esc(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function confetto(burst){ const cols = ['#ffc531','#ff3348','#3fd36a','#4ab0ff','#ffffff','#ff8a3d']; return { x: burst ? W/2 + (Math.random()-.5)*60 : Math.random()*W, y: burst ? H*.45 : -10, vx: burst ? (Math.random()-.5)*520 : (Math.random()-.5)*40, vy: burst ? -200-Math.random()*420 : 40+Math.random()*60, r: Math.random()*TAU, vr: (Math.random()-.5)*12, w: 4+Math.random()*5, h: 6+Math.random()*6, c: cols[Math.random()*cols.length|0] }; }
 
@@ -1208,6 +1212,7 @@ function act(a){
     case 'nextSong': if (st.show && st.mode === 'show-wait'){ sfx.click(); if (st.show.song < SONGS.length-1) startSong(st.show.song+1); else finale(); } break;
     case 'restart': stopSong(); st.show = null; sfx.click(); st.confetti = []; st.score = 0; st.ibis = 0; st.hearts = CONFIG.vidas; enterPhase(0, { crossfade: true, rebuild: true }); break;
     case 'sound': setSound(!soundOn); sfx.click(); break;
+    case 'intro': sfx.click(); show('menu'); bgmPlay('cubatao'); break;
   }
 }
 document.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); act(b.dataset.act); }));
@@ -1224,7 +1229,9 @@ requestAnimationFrame(t => { last = t; frame(t); });
 
 // atalho p/ testes: ?fase=2
 const q = new URLSearchParams(location.search);
-if (q.get('fase') === '4') startShow();
+if (q.get('fase') === 'fim'){ st.show = null; finale(); }
+else if (q.get('fase') === '4') startShow();
+else if (!q.get('fase')) show('intro');
 else if (q.get('fase')){ const f = clamp((+q.get('fase')||1)-1, 0, PHASES.length-1); setScene(f); enterPhase(f); }
 window.__fm = { bgm: () => ({ key: bgmKey, el: bgmEl() && { t: bgmEl().currentTime, p: bgmEl().paused } }), st, act, enterPhase, startPlay, PHASES, startShow, hitLane, showTime, SONGS };
 })();

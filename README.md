@@ -11,9 +11,11 @@ Joguinho estilo Flappy Bird do aniversário do Mike: voe por o **Jardim Nova Rep
 ## Trilha
 - Fases 1 e 2: Hino de Cubatão (`assets/music/hino-cubatao.mp3`)
 - Fase 3: Tiro ao Álvaro, remix 8-bit (`assets/music/tiro-ao-alvaro.mp3`)
+- Final: tema épico em chiptune (`assets/music/final-epico.mp3`)
+- `?fase=fim` na URL abre direto a tela final (pra testar)
 
 ## Editar o convite
-No topo de `game.js`, preencha `CONFIG.festa` (data, hora, local e, opcionalmente, links do Google Maps e do WhatsApp para confirmar presença).
+No topo de `game.js`, em `CONFIG.festa`: data, hora, local, endereço, link do mapa, o número de WhatsApp que recebe as confirmações (`whatsapp`, só dígitos com 55 + DDD) e as mensagens dos botões.
 
 ## Publicar
 É um site estático: GitHub Pages (Settings → Pages → branch `main`, pasta raiz) ou Netlify.
