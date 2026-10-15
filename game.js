@@ -18,11 +18,14 @@ const CONFIG = {
 };
 
 const PHASES = [
-  { id:'novarepublica', nome:'NOVA REPÚBLICA', sub:'JARDIM · CUBATÃO',   obst:8,  speed:150, gap:184, spacing:212, kind:'concreto', glow:'#e88a50' },
-  { id:'mangue',        nome:'MANGUEZAL',      sub:'CUBATÃO',            obst:10, speed:162, gap:174, spacing:206, kind:'tronco',   glow:'#d8a050' },
-  { id:'saopaulo',      nome:'SÃO PAULO',      sub:'A CAPITAL',          obst:12, speed:176, gap:166, spacing:200, kind:'masp',     glow:'#c04a6a' },
+  { id:'novarepublica', nome:'NOVA REPÚBLICA', sub:'JARDIM · CUBATÃO',   bgm:'cubatao', obst:8,  speed:150, gap:184, spacing:212, kind:'concreto', glow:'#e88a50' },
+  { id:'mangue',        nome:'MANGUEZAL',      sub:'CUBATÃO',            bgm:'cubatao', obst:10, speed:162, gap:174, spacing:206, kind:'tronco',   glow:'#d8a050' },
+  { id:'saopaulo',      nome:'SÃO PAULO',      sub:'A CAPITAL',          bgm:'sp',      obst:12, speed:176, gap:166, spacing:200, kind:'masp',     glow:'#c04a6a' },
 ];
 const IBIS_PER_PHASE = 5;
+/* trilha das fases de voo (em loop) */
+const BGM = { cubatao:'assets/music/hino-cubatao.mp3', sp:'assets/music/tiro-ao-alvaro.mp3' };
+const BGM_VOL = .5;
 const TOTAL_IBIS = IBIS_PER_PHASE * PHASES.length;
 
 /* sprites: atlas com as animações do Mike — [x, y, w, h, âncoraX, âncoraY] (âncora = centro da cabeça) */
@@ -533,7 +536,21 @@ let tagTimer = 0;
 function tag(small, big, ms=1800){ $('#tagS').textContent = small; $('#tagB').textContent = big; $('#tag').classList.add('on'); clearTimeout(tagTimer); tagTimer = setTimeout(() => $('#tag').classList.remove('on'), ms); }
 
 /* ---------- fluxo ---------- */
+let bgmKey = null, bgmPending = false;
+function bgmEl(){ return bgmKey ? songEl(BGM[bgmKey]) : null; }
+function bgmPlay(key){
+  if (key !== bgmKey){ bgmStop(); bgmKey = key; const el = bgmEl(); el.loop = true; el.volume = BGM_VOL; try { el.currentTime = 0; } catch(e){} }
+  const el = bgmEl(); if (!el) return;
+  el.muted = !soundOn;
+  if (!el.paused) return;
+  let p; try { p = el.play(); } catch(e){ p = null; }
+  bgmPending = false;
+  if (p && p.catch) p.catch(() => { bgmPending = true; });
+}
+function bgmPause(){ const el = bgmEl(); if (el) try { el.pause(); } catch(e){} }
+function bgmStop(){ bgmPause(); bgmKey = null; bgmPending = false; }
 function toMenu(){
+  bgmStop();
   st.mode = 'menu'; setScene(0); st.confetti = []; st.obst = []; st.pickups = []; st.signs = []; st.parts = [];
   st.score = 0; st.ibis = 0; st.hearts = CONFIG.vidas;
   $('#best').textContent = st.best ? `RECORDE: ${st.best} ★` : 'CUBATÃO É NÓIS';
@@ -541,6 +558,7 @@ function toMenu(){
 }
 function enterPhase(i, opts={}){
   if (i !== st.phase || !st.scene || opts.rebuild) setScene(i, opts.crossfade);
+  bgmPlay(PHASES[i].bgm);
   const P = PHASES[i];
   st.mode = 'ready'; st.y = H*.42; st.vy = 0; st.rot = 0; st.inv = 0; st.hurtT = 0;
   st.passed = 0; st.obst = []; st.pickups = []; st.parts = []; st.confetti = [];
@@ -937,7 +955,7 @@ function playSong(){
 }
 
 function startShow(){
-  audio();
+  audio(); bgmStop();
   st.show = { song:0, total:0, el:null };
   st.confetti = []; st.parts = [];
   show(null); hudOn(false); hint(false);
@@ -1149,6 +1167,7 @@ addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(r
 function press(e){
   if (e && e.target.closest && e.target.closest('button,a')) return;
   audio();
+  if (bgmPending && bgmKey) bgmPlay(bgmKey);
   if (st.mode === 'show'){ if (e && e.clientX !== undefined){ const r = cv.getBoundingClientRect(), lx = (e.clientX - r.left)/r.width*W; hitLane(lx < W/3 ? 0 : lx < W*2/3 ? 1 : 2); } return; }
   if (st.mode === 'play') flap();
   else if (st.mode === 'ready') startPlay();
@@ -1168,6 +1187,8 @@ addEventListener('keydown', e => {
 });
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && st.mode === 'play') act('pause');
+  if (document.hidden) bgmPause();
+  if (!document.hidden && bgmKey && st.mode !== 'pause') bgmPlay(bgmKey);
   if (document.hidden && st.mode === 'show'){ stopSong(); st.mode = 'show-paused'; }
   if (!document.hidden && st.mode === 'show-paused') startSong(st.show.song);
 });
@@ -1179,8 +1200,8 @@ function act(a){
   audio();
   switch (a){
     case 'start': sfx.click(); enterPhase(0); break;
-    case 'pause': if (st.mode === 'play' || st.mode === 'ready'){ pausedFrom = st.mode; st.mode = 'pause'; show('pause'); } break;
-    case 'resume': if (st.mode === 'pause'){ st.mode = pausedFrom || 'play'; show(null); last = performance.now(); } break;
+    case 'pause': if (st.mode === 'play' || st.mode === 'ready'){ pausedFrom = st.mode; st.mode = 'pause'; show('pause'); bgmPause(); } break;
+    case 'resume': if (st.mode === 'pause'){ st.mode = pausedFrom || 'play'; show(null); last = performance.now(); if (bgmKey) bgmPlay(bgmKey); } break;
     case 'retry': if (st.show){ sfx.click(); resetOverText(); startSong(st.show.song); break; } sfx.click(); st.score = st.scoreAtPhase; st.ibis = st.ibisAtPhase; st.hearts = CONFIG.vidas; enterPhase(st.phase); break;
     case 'menu': sfx.click(); stopSong(); st.show = null; resetOverText(); toMenu(); break;
     case 'next': if (st.phase === PHASES.length-1){ sfx.click(); startShow(); break; } sfx.click(); st.hearts = Math.min(CONFIG.vidas, st.hearts + (st.pendingHeart||0)); st.pendingHeart = 0; enterPhase(st.phase + 1, { crossfade: true }); break;
@@ -1205,5 +1226,5 @@ requestAnimationFrame(t => { last = t; frame(t); });
 const q = new URLSearchParams(location.search);
 if (q.get('fase') === '4') startShow();
 else if (q.get('fase')){ const f = clamp((+q.get('fase')||1)-1, 0, PHASES.length-1); setScene(f); enterPhase(f); }
-window.__fm = { st, act, enterPhase, startPlay, PHASES, startShow, hitLane, showTime, SONGS };
+window.__fm = { bgm: () => ({ key: bgmKey, el: bgmEl() && { t: bgmEl().currentTime, p: bgmEl().paused } }), st, act, enterPhase, startPlay, PHASES, startShow, hitLane, showTime, SONGS };
 })();

@@ -8,6 +8,10 @@ Joguinho estilo Flappy Bird do aniversário do Mike: voe por o **Jardim Nova Rep
 - As músicas ficam em `assets/music/`; as notas foram geradas a partir das batidas e estão em `SONGS` no `game.js`
 - `?fase=2`, `?fase=3` ou `?fase=4` na URL pula direto pra uma fase (pra testar)
 
+## Trilha
+- Fases 1 e 2: Hino de Cubatão (`assets/music/hino-cubatao.mp3`)
+- Fase 3: Tiro ao Álvaro, remix 8-bit (`assets/music/tiro-ao-alvaro.mp3`)
+
 ## Editar o convite
 No topo de `game.js`, preencha `CONFIG.festa` (data, hora, local e, opcionalmente, links do Google Maps e do WhatsApp para confirmar presença).
 
