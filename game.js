@@ -55,7 +55,10 @@ const game = $('#game'), cv = $('#c'), ctx = cv.getContext('2d');
 let S = 1; // px de backing por unidade lógica
 function mk(w,h){ const c = document.createElement('canvas'); c.width = Math.ceil(w*S); c.height = Math.ceil(h*S); const x = c.getContext('2d'); x.setTransform(S,0,0,S,0,0); return [c,x]; }
 
-const atlasImg = new Image(); atlasImg.src = 'assets/sprites/mike-atlas.webp';
+const atlasImg = document.getElementById('atlasSrc');   // Mike voando (img escondida no HTML)
+const gtImg = document.getElementById('gtSrc');         // Mike guitarrista
+const GT = {"h":336,"frames":{"play":[[0,0,271,335,126.8,334.3],[275,0,260,337,119.2,336.3],[539,0,255,338,99.2,337.0],[798,0,243,334,121.3,332.9],[1045,0,262,334,143.4,332.9],[1311,0,261,337,118.5,336.3]],"rock":[[1576,0,314,332,126.8,330.8],[0,342,236,291,93.0,290.2],[240,342,314,333,120.6,332.2],[558,342,238,346,51.0,345.3],[800,342,236,286,40.0,285.3]],"miss":[[1040,342,286,298,190.2,297.1],[1330,342,275,295,83.4,294.3],[1609,342,250,285,91.7,284.0],[0,692,312,271,169.6,270.2],[316,692,320,203,97.2,201.9]],"cheer":[[640,692,318,333,101.3,332.2],[962,692,330,340,118.5,339.8],[1296,692,312,339,146.1,338.4],[1612,692,310,350,143.4,349.4]]}};
+const GT_H = 156;   // altura do Mike no palco, em px lógicos
 
 /* ======================================================================
    ÁUDIO (sintetizado, sem arquivos)
@@ -946,7 +949,7 @@ function startSong(i){
   const sh = st.show, S0 = SONGS[i];
   stopSong();
   Object.assign(sh, { song:i, notes:[], score:0, combo:0, maxCombo:0, hits:0, perfect:0, misses:0, energy:70,
-    judge:null, judgeT:0, laneFlash:[0,0,0], hitFx:[], missT:0, flapT:0, loading:false, ended:false,
+    judge:null, judgeT:0, laneFlash:[0,0,0], hitFx:[], missT:0, flapT:0, rockT:0, loading:false, ended:false,
     el: songEl(S0.src), noAudio:false, needTap:false, t0:0, lastT:-LEAD, dur: S0.chart.dur });
   for (const n of S0.chart.notes){ sh.notes.push({ t:n[0], lane:n[1], done:false }); if (n.length > 2) sh.notes.push({ t:n[0], lane:n[2], done:false }); }
   sh.notes.sort((a,b) => a.t - b.t);
@@ -973,17 +976,18 @@ function hitLane(l){
   sh.score += (perfect ? 100 : 50) * mult;
   sh.energy = Math.min(100, sh.energy + (perfect ? 4 : 2.5));
   sh.flapT = FLAP_DUR;
+  if (sh.combo >= 8 && sh.combo % 8 === 0) sh.rockT = .9;
   judge(perfect ? 'PERFEITO!' : 'BOM!');
   sh.hitFx.push({ lane:l, life:1, perfect });
   if (sh.combo > 0 && sh.combo % 10 === 0) tone(1320, .12, 'triangle', .06);
 }
 function missNote(){
   const sh = st.show;
-  sh.combo = 0; sh.misses++; sh.energy -= 13; sh.missT = .45;
+  sh.combo = 0; sh.misses++; sh.energy -= 13; sh.missT = .6; sh.rockT = 0;
   judge('ERROU!'); tone(140, .18, 'sawtooth', .08, 90);
   if (sh.energy <= 0){
     sh.energy = 0; stopSong(); st.mode = 'show-fail'; sfx.over(); st.shake = .3;
-    $('#overT').textContent = 'A GALERA VAIOU!';
+    $('#overT').textContent = 'A GALERA VAIOU!'; $('#over .mike').src = $('#gtSadSrc').src;
     $('#overP').innerHTML = 'O Mike perdeu o ritmo.<br>Bora tentar essa música de novo?';
     setTimeout(() => { if (st.mode === 'show-fail') show('over'); }, 800);
   }
@@ -1002,7 +1006,7 @@ function songDone(){
 function updateShow(dt){
   const sh = st.show;
   for (let k=0;k<3;k++) sh.laneFlash[k] = Math.max(0, sh.laneFlash[k] - dt);
-  sh.judgeT = Math.max(0, sh.judgeT - dt); sh.missT = Math.max(0, sh.missT - dt); sh.flapT = Math.max(0, sh.flapT - dt);
+  sh.judgeT = Math.max(0, sh.judgeT - dt); sh.missT = Math.max(0, sh.missT - dt); sh.flapT = Math.max(0, sh.flapT - dt); sh.rockT = Math.max(0, (sh.rockT||0) - dt);
   for (const f of sh.hitFx) f.life -= dt*2.6; sh.hitFx = sh.hitFx.filter(f => f.life > 0);
   st.shake = Math.max(0, st.shake - dt);
   for (const c of st.confetti){ c.vy += 300*dt; c.vy = Math.min(c.vy, 110); c.vx *= Math.pow(.3, dt); c.x += c.vx*dt; c.y += c.vy*dt; c.r += c.vr*dt; }
@@ -1027,7 +1031,7 @@ function buildStage(){
   for (const sx of [6, W-46]){ x.fillStyle = '#141018'; x.fillRect(sx, 380, 40, 150); x.strokeStyle = '#2a2430'; x.strokeRect(sx+.5, 380.5, 39, 149);
     for (const yy of [410, 460, 505]){ x.fillStyle = '#26202e'; x.beginPath(); x.arc(sx+20, yy, 14, 0, TAU); x.fill(); x.fillStyle = '#0a080c'; x.beginPath(); x.arc(sx+20, yy, 6, 0, TAU); x.fill(); } }
   // faixa
-  x.save(); x.translate(W/2, 88); x.fillStyle = '#ffc531'; x.fillRect(-92, -12, 184, 24); x.fillStyle = '#14121c'; x.font = '400 15px "Luckiest Guy", sans-serif'; x.textAlign = 'center'; x.fillText('NIVER DO MIKE', 0, 6); x.restore();
+  x.save(); x.translate(W/2, 30); x.fillStyle = '#ffc531'; x.fillRect(-92, -12, 184, 24); x.fillStyle = '#14121c'; x.font = '400 15px "Luckiest Guy", sans-serif'; x.textAlign = 'center'; x.fillText('NIVER DO MIKE', 0, 6); x.restore();
   stageBg = c;
 }
 function laneX(l, p){ // p: 0 no topo, 1 na linha de acerto
@@ -1092,14 +1096,16 @@ function renderShow(){
     ctx.fillStyle = '#06040c'; ctx.beginPath(); ctx.arc(x, y - 18, 9, 0, TAU); ctx.fill(); ctx.fillRect(x-12, y-10, 24, 40);
     if (k%4 === 1){ ctx.strokeStyle = '#06040c'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x+8, y-6); ctx.lineTo(x+16, y-34 - bob); ctx.stroke(); }
   }
-  // Mike voando acima da pista
-  if (atlasImg.complete && atlasImg.naturalWidth){
-    let anim = 'glide', i = Math.floor(st.t*7) % 8; if (i > 4) i = 8 - i;
-    if (st.mode === 'show-fail'){ anim = 'fall'; i = Math.min(6, Math.floor((st.t*12) % 7)); }
-    else if (sh.missT > 0){ anim = 'fall'; i = Math.min(2, Math.floor((.45 - sh.missT)*8)); }
-    else if (sh.flapT > 0){ anim = 'flap'; i = Math.min(6, Math.floor((1 - sh.flapT/FLAP_DUR)*7)); }
-    const [sx, sy, sw, sh2, ax, ay] = ATLAS.frames[anim][i], k = SPR_SCALE * .92, my = 150 + Math.sin(st.t*3)*5 - pulse*3;
-    ctx.drawImage(atlasImg, sx, sy, sw, sh2, W/2 - ax*k + 12, my - ay*k, sw*k, sh2*k);
+  // Mike guitarrista no fundo do palco
+  if (gtImg.complete && gtImg.naturalWidth){
+    let anim = 'play', i = Math.floor((t < 0 ? st.t*3 : beat)*2) % 6;
+    if (st.mode === 'show-fail'){ anim = 'miss'; i = 4; }
+    else if (st.mode === 'show-wait' || st.mode === 'finale'){ anim = 'cheer'; i = Math.floor(st.t*5) % 4; }
+    else if (sh.missT > 0){ anim = 'miss'; i = Math.min(3, Math.floor((.6 - sh.missT)/.6*4)); }
+    else if (sh.rockT > 0){ anim = 'rock'; i = Math.min(4, Math.floor((.9 - sh.rockT)/.9*5)); }
+    const [sx, sy, sw, sh2, ax, ay] = GT.frames[anim][i], k = GT_H / GT.h, fy = TOP_Y + 4 - (anim === 'play' ? pulse*2 : 0);
+    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(W/2, TOP_Y + 4, 40, 6, 0, 0, TAU); ctx.fill();
+    ctx.drawImage(gtImg, sx, sy, sw, sh2, W/2 - ax*k, fy - ay*k, sw*k, sh2*k);
   }
   // HUD do show
   const txt = (s, x, y, size, col, al='center', font='"Lilita One"') => { ctx.font = `400 ${size}px ${font}, sans-serif`; ctx.textAlign = al; ctx.lineWidth = size*.28; ctx.strokeStyle = '#14121c'; ctx.lineJoin = 'round'; ctx.strokeText(s, x, y); ctx.fillStyle = col; ctx.fillText(s, x, y); };
@@ -1165,7 +1171,8 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden && st.mode === 'show'){ stopSong(); st.mode = 'show-paused'; }
   if (!document.hidden && st.mode === 'show-paused') startSong(st.show.song);
 });
-function resetOverText(){ $('#overT').textContent = 'GAME OVER'; $('#overP').innerHTML = 'Não foi dessa vez,<br>mas a festa ainda te espera!'; }
+const overImgDefault = $('#over .mike').src;
+function resetOverText(){ $('#over .mike').src = overImgDefault; $('#overT').textContent = 'GAME OVER'; $('#overP').innerHTML = 'Não foi dessa vez,<br>mas a festa ainda te espera!'; }
 
 let pausedFrom = null;
 function act(a){
