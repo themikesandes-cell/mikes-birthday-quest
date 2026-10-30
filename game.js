@@ -9,10 +9,10 @@ const CONFIG = {
   festa: {
     titulo:   'NIVER DO MIKE',
     data:     'SEXTA, 13 DE NOVEMBRO',
-    hora:     '20H',
-    local:    'PICLES CARDEAL',
-    endereco: 'RUA CARDEAL ARCOVERDE, 1838',
-    mapa:     'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent('Picles Cardeal, Rua Cardeal Arcoverde, 1838, São Paulo'),
+    hora:     'A PARTIR DAS 18H',
+    local:    'GOELA BAR',
+    endereco: 'RUA FIDALGA, 396 · PINHEIROS',
+    mapa:     'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent('Goela Bar, Rua Fidalga, 396, São Paulo'),
     whatsapp: '5511981266722',                         // número do Mike só com dígitos, ex: '5513999999999' (vazio = a pessoa escolhe o contato)
     msgSim:   'VOU COLAR SIM!',
     msgNao:   'VOU SER VACILÃO E NÃO VOU',
